@@ -2,6 +2,8 @@ package uaitube.ui;
 
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -9,9 +11,11 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import uaitube.service.YoutubeService;
 import javafx.scene.image.Image;
+
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+
+import uaitube.service.YoutubeService;
 
 import java.io.File;
 
@@ -36,16 +40,16 @@ public class UaiTubeUI extends Application {
         root.setStyle("-fx-background-color: #0f0f0f;");
 
         Label title = new Label("UaiTube");
-        title.setStyle("-fx-text-fill: #ff3b3b; -fx-font-size: 22px; -fx-font-weight: bold;");
+        title.setStyle("-fx-text-fill: #ff3b3b; -fx-font-size: 24px; -fx-font-weight: bold;");
 
-        Label folderLabelDesc = new Label("Realize o download de Músicas ou PlayList completas");
-        folderLabelDesc.setStyle("-fx-text-fill: #b3b3b3;");
+        Label desc = new Label("Baixe músicas e playlists do YouTube");
+        desc.setStyle("-fx-text-fill: #b3b3b3;");
 
-        VBox header = new VBox(5, title);
-        header.setStyle("-fx-alignment: center;");
+        VBox header = new VBox(5, title, desc);
+        header.setAlignment(Pos.CENTER);
 
         TextField urlField = new TextField();
-        urlField.setPromptText("Cole a URL...");
+        urlField.setPromptText("Cole a URL do YouTube...");
         urlField.setStyle("-fx-background-color: #1f1f1f; -fx-text-fill: white;");
 
         // 🔴 PASTA
@@ -73,9 +77,18 @@ public class UaiTubeUI extends Application {
         Label info = new Label("Aguardando...");
         info.setStyle("-fx-text-fill: #b3b3b3;");
 
-        // 🔥 NOVO: NOME DA MÚSICA
+        // 🔴 NOME ATUAL
         Label musicName = new Label("-");
-        musicName.setStyle("-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold;");
+        musicName.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+
+        // 🔴 LISTA VISUAL DE DOWNLOADS
+        ObservableList<String> musicList = FXCollections.observableArrayList();
+        ListView<String> listView = new ListView<>(musicList);
+        listView.setPrefHeight(150);
+        listView.setStyle(
+                "-fx-control-inner-background: #181818;" +
+                "-fx-text-fill: white;"
+        );
 
         // 🔴 PROGRESSO
         ProgressBar progress = new ProgressBar(0);
@@ -85,8 +98,8 @@ public class UaiTubeUI extends Application {
         // 🔴 LOG
         TextArea logArea = new TextArea();
         logArea.setEditable(false);
-        logArea.setStyle("-fx-control-inner-background:#181818; -fx-text-fill:white;");
         logArea.setPrefHeight(120);
+        logArea.setStyle("-fx-control-inner-background:#181818; -fx-text-fill:white;");
 
         Button downloadBtn = new Button("⬇ Download");
         styleButton(downloadBtn);
@@ -98,18 +111,32 @@ public class UaiTubeUI extends Application {
             info.setText("Aguardando...");
             logArea.clear();
             musicName.setText("-");
+            musicList.clear();
         });
 
+        // 🔥 BUSCAR NOME AO COLAR URL
         urlField.textProperty().addListener((obs, oldValue, newValue) -> {
-            if (newValue != null &&
-                !newValue.isEmpty() &&
-                !newValue.equals(lastUrl[0])) {
+
+            if (newValue != null && !newValue.isEmpty() && !newValue.equals(lastUrl[0])) {
 
                 lastUrl[0] = newValue;
+
                 resetUI.run();
+
+                Platform.runLater(() -> info.setText("🔎 Buscando informações..."));
+
+                new Thread(() -> {
+                    String titleMusic = service.getMusicTitle(newValue);
+
+                    Platform.runLater(() -> {
+                        musicName.setText("🎵 " + titleMusic);
+                        info.setText("Pronto para download");
+                    });
+                }).start();
             }
         });
 
+        // 🔥 DOWNLOAD
         downloadBtn.setOnAction(e -> {
 
             String url = urlField.getText();
@@ -119,7 +146,7 @@ public class UaiTubeUI extends Application {
                 return;
             }
 
-            info.setText(url.contains("playlist") ? "📂 Playlist..." : "🎵 Música...");
+            info.setText(url.contains("playlist") ? "📂 Playlist..." : "🎵 Baixando...");
 
             new Thread(() -> {
                 try {
@@ -127,16 +154,32 @@ public class UaiTubeUI extends Application {
                     service.downloadWithProgress(
                             url,
                             downloadPath,
+
+                            // progresso
                             p -> Platform.runLater(() -> progress.setProgress(p)),
+
+                            // log + lista visual
                             line -> Platform.runLater(() -> {
 
                                 logArea.appendText(line + "\n");
 
                                 // 🔥 CAPTURA NOME DA MÚSICA
                                 if (line.contains("[download] Destination:")) {
+
                                     String name = line.replace("[download] Destination:", "").trim();
-                                    musicName.setText("🎵 " + name);
+
+                                    musicList.add("⬇ " + name);
                                 }
+
+                                // 🔥 MARCAR COMO CONCLUÍDO
+                                if (line.contains("100%")) {
+                                    int lastIndex = musicList.size() - 1;
+                                    if (lastIndex >= 0) {
+                                        String current = musicList.get(lastIndex);
+                                        musicList.set(lastIndex, "✔ " + current.substring(2));
+                                    }
+                                }
+
                             })
                     );
 
@@ -150,17 +193,17 @@ public class UaiTubeUI extends Application {
 
         root.getChildren().addAll(
                 header,
-                folderLabelDesc,
                 urlField,
                 folderBox,
                 info,
-                musicName, // 🔥 AQUI
+                musicName,
+                listView, // 🔥 NOVA LISTA VISUAL
                 progress,
                 downloadBtn,
                 logArea
         );
 
-        stage.setScene(new Scene(root, 500, 580));
+        stage.setScene(new Scene(root, 520, 650));
         stage.setTitle("UaiTube");
         stage.show();
     }
@@ -170,7 +213,8 @@ public class UaiTubeUI extends Application {
                 "-fx-background-color: #ff3b3b;" +
                 "-fx-text-fill: white;" +
                 "-fx-font-weight: bold;" +
-                "-fx-background-radius: 20;"
+                "-fx-background-radius: 20;" +
+                "-fx-cursor: hand;"
         );
     }
 

@@ -140,4 +140,74 @@ public class YoutubeService {
 
         return url;
     }
+    
+    public String getMusicTitle(String url) {
+
+        try {
+
+            ProcessBuilder pb = new ProcessBuilder(
+                    "yt-dlp",
+                    "--dump-single-json",
+                    "--no-playlist",
+                    url
+            );
+
+            pb.redirectErrorStream(true);
+
+            Process process = pb.start();
+
+            java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getInputStream())
+            );
+
+            StringBuilder output = new StringBuilder();
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                output.append(line);
+            }
+
+            process.waitFor();
+
+            String raw = output.toString();
+
+            // 🔥 REMOVE WARNINGS → pega só JSON
+            int jsonStart = raw.indexOf("{");
+
+            if (jsonStart == -1) {
+                return "Não identificado";
+            }
+
+            String json = raw.substring(jsonStart);
+
+            // 🔥 EXTRAI TITLE
+            String title = extract(json, "\"title\": \"", "\"");
+
+            if (title == null || title.isEmpty()) {
+                return "Não identificado";
+            }
+
+            return title;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Erro ao buscar música";
+        }
+    }
+
+    // 🔥 MÉTODO AUXILIAR (evita split frágil)
+    private String extract(String json, String start, String end) {
+        try {
+            int i = json.indexOf(start);
+            if (i == -1) return null;
+
+            int j = json.indexOf(end, i + start.length());
+            if (j == -1) return null;
+
+            return json.substring(i + start.length(), j);
+
+        } catch (Exception e) {
+            return null;
+        }
+    }
 }
