@@ -61,4 +61,45 @@ public class YoutubeService {
     private boolean isPlaylist(String url) {
         return url.contains("playlist?list=");
     }
+    
+    public void downloadWithPath(String url, String basePath) throws IOException, InterruptedException {
+
+        boolean isPlaylist = isPlaylist(url);
+
+        String outputTemplate;
+
+        if (isPlaylist) {
+            outputTemplate = basePath + "\\%(playlist_title)s\\%(title)s.%(ext)s";
+        } else {
+            outputTemplate = basePath + "\\%(title)s.%(ext)s";
+        }
+
+        List<String> command = new ArrayList<>();
+
+        command.add("yt-dlp");
+        command.add("-f"); command.add("bestaudio");
+        command.add("-x");
+        command.add("--audio-format"); command.add("mp3");
+        command.add("-o"); command.add(outputTemplate);
+        command.add("--embed-thumbnail");
+        command.add("--add-metadata");
+        command.add("--convert-thumbnails"); command.add("jpg");
+
+        if (!isPlaylist) {
+            command.add("--no-playlist");
+        }
+
+        command.add(url);
+
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.inheritIO();
+
+        Process process = pb.start();
+        int exit = process.waitFor();
+
+        if (exit != 0) {
+            throw new RuntimeException("Erro no download");
+        }
+    }
+    
 }
