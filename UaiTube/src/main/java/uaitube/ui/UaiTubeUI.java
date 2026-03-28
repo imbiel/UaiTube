@@ -5,7 +5,7 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.*;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
@@ -20,111 +20,116 @@ public class UaiTubeUI extends Application {
     @Override
     public void start(Stage stage) {
 
-        // 🔹 Inicializa Spring
         AnnotationConfigApplicationContext context =
                 new AnnotationConfigApplicationContext("uaitube");
 
         YoutubeService service = context.getBean(YoutubeService.class);
 
-        // 🔹 Título
-        Label title = new Label("🎧 UaiTube");
-        title.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+        // 🎨 Tema dark
+        VBox root = new VBox(15);
+        root.setPadding(new Insets(20));
+        root.setStyle("-fx-background-color: #121212;");
 
-        // 🔹 Campo URL
+        Label title = new Label("UaiTube");
+        title.setStyle("-fx-text-fill: white; -fx-font-size: 22px; -fx-font-weight: bold;");
+
         TextField urlField = new TextField();
-        urlField.setPromptText("Cole a URL do YouTube...");
+        urlField.setPromptText("Cole a URL...");
+        urlField.setStyle("-fx-background-color: #282828; -fx-text-fill: white;");
 
-        // 🔹 Pasta
         Label folderLabel = new Label("Pasta: " + downloadPath);
+        folderLabel.setStyle("-fx-text-fill: #b3b3b3;");
 
-        Button chooseFolder = new Button("Selecionar Pasta");
+        Button chooseFolder = new Button("📂 Pasta");
+        styleButton(chooseFolder);
+
         chooseFolder.setOnAction(e -> {
             DirectoryChooser chooser = new DirectoryChooser();
-            chooser.setTitle("Escolher pasta de download");
-
-            File selected = chooser.showDialog(stage);
-
-            if (selected != null) {
-                downloadPath = selected.getAbsolutePath();
+            File file = chooser.showDialog(stage);
+            if (file != null) {
+                downloadPath = file.getAbsolutePath();
                 folderLabel.setText("Pasta: " + downloadPath);
             }
         });
 
-        // 🔹 Info
-        Label infoLabel = new Label("Aguardando URL...");
-        infoLabel.setStyle("-fx-text-fill: gray;");
+        Label info = new Label("Aguardando...");
+        info.setStyle("-fx-text-fill: #b3b3b3;");
 
-        // 🔹 Barra de progresso
-        ProgressBar progressBar = new ProgressBar(0);
-        progressBar.setPrefWidth(400);
+        ProgressBar progress = new ProgressBar(0);
+        progress.setPrefWidth(400);
 
-        // 🔹 Botão download
+        TextArea logArea = new TextArea();
+        logArea.setEditable(false);
+        logArea.setStyle("-fx-control-inner-background:#181818; -fx-text-fill:white;");
+        logArea.setPrefHeight(120);
+
         Button downloadBtn = new Button("⬇ Download");
+        styleButton(downloadBtn);
 
         downloadBtn.setOnAction(e -> {
 
             String url = urlField.getText();
 
-            if (url == null || url.isEmpty()) {
-                showAlert("Cole uma URL válida!");
+            if (url.isEmpty()) {
+                alert("Cole uma URL!");
                 return;
             }
 
-            boolean isPlaylist = url.contains("playlist");
-
-            if (isPlaylist) {
-                infoLabel.setText("📂 Playlist detectada...");
-            } else {
-                infoLabel.setText("🎵 Música detectada...");
-            }
+            info.setText(url.contains("playlist") ? "📂 Playlist..." : "🎵 Música...");
 
             new Thread(() -> {
                 try {
-                    Platform.runLater(() -> {
-                        progressBar.setProgress(-1); // indeterminado
-                    });
 
-                    service.downloadWithPath(url, downloadPath);
+                    service.downloadWithProgress(
+                            url,
+                            downloadPath,
 
-                    Platform.runLater(() -> {
-                        progressBar.setProgress(1);
-                        infoLabel.setText("✅ Download concluído!");
-                    });
+                            // progresso
+                            p -> Platform.runLater(() -> progress.setProgress(p)),
+
+                            // log
+                            line -> Platform.runLater(() -> {
+                                logArea.appendText(line + "\n");
+                            })
+                    );
+
+                    Platform.runLater(() -> info.setText("✅ Concluído"));
 
                 } catch (Exception ex) {
-                    Platform.runLater(() -> {
-                        progressBar.setProgress(0);
-                        showAlert("Erro: " + ex.getMessage());
-                    });
+                    Platform.runLater(() -> alert(ex.getMessage()));
                 }
             }).start();
         });
 
-        // 🔹 Layout
-        VBox layout = new VBox(15,
+        root.getChildren().addAll(
                 title,
                 urlField,
                 chooseFolder,
                 folderLabel,
-                infoLabel,
-                progressBar,
-                downloadBtn
+                info,
+                progress,
+                downloadBtn,
+                logArea
         );
 
-        layout.setPadding(new Insets(20));
-
-        // 🔹 Cena
-        Scene scene = new Scene(layout, 450, 350);
-
+        stage.setScene(new Scene(root, 500, 500));
         stage.setTitle("UaiTube");
-        stage.setScene(scene);
         stage.show();
     }
 
-    private void showAlert(String msg) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setContentText(msg);
-        alert.show();
+    private void styleButton(Button btn) {
+        btn.setStyle(
+                "-fx-background-color: #1DB954;" +
+                "-fx-text-fill: black;" +
+                "-fx-font-weight: bold;" +
+                "-fx-background-radius: 20;"
+        );
+    }
+
+    private void alert(String msg) {
+        Alert a = new Alert(Alert.AlertType.ERROR);
+        a.setContentText(msg);
+        a.show();
     }
 
     public static void main(String[] args) {

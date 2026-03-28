@@ -1,105 +1,143 @@
 package uaitube.service;
 
+import org.springframework.stereotype.Service;
+
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
-
-import org.springframework.stereotype.Service;
 
 @Service
 public class YoutubeService {
 
-    private static final String BASE_PATH = "C:\\Users\\Gabriel\\Music";
+    public void downloadWithProgress(
+            String url,
+            String basePath,
+            java.util.function.Consumer<Double> onProgress,
+            java.util.function.Consumer<String> onLog
+    ) throws IOException {
 
-    public void download(String url) throws IOException, InterruptedException {
+        String normalizedUrl = normalizeUrl(url);
+        boolean isPlaylist = isPlaylist(normalizedUrl);
 
-        boolean isPlaylist = isPlaylist(url);
+        String outputTemplate = isPlaylist
+                ? basePath + "\\%(playlist_title)s\\%(title)s.%(ext)s"
+                : basePath + "\\%(title)s.%(ext)s";
 
-        String outputTemplate;
+        List<String> command = buildCommand(normalizedUrl, outputTemplate, isPlaylist);
 
-        if (isPlaylist) {
-            System.out.println("📂 Detectado: PLAYLIST");
-            outputTemplate = BASE_PATH + "\\%(playlist_title)s\\%(title)s.%(ext)s";
-        } else {
-            System.out.println("🎵 Detectado: MÚSICA");
-            outputTemplate = BASE_PATH + "\\%(title)s.%(ext)s";
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.redirectErrorStream(true);
+
+        Process process = pb.start();
+
+        // 🔥 Thread para ler saída do yt-dlp
+        new Thread(() -> readProcessOutput(process, onProgress, onLog)).start();
+
+        try {
+            int exit = process.waitFor();
+
+            if (exit != 0) {
+                onLog.accept("❌ Erro no download (exit code " + exit + ")");
+            } else {
+                onProgress.accept(1.0);
+                onLog.accept("✅ Download finalizado!");
+            }
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            onLog.accept("❌ Processo interrompido");
         }
+    }
 
-        // 🔥 Monta comando dinamicamente
+    // 🔧 Monta comando yt-dlp
+    private List<String> buildCommand(String url, String outputTemplate, boolean isPlaylist) {
+
         List<String> command = new ArrayList<>();
 
         command.add("yt-dlp");
         command.add("-f"); command.add("bestaudio");
         command.add("-x");
         command.add("--audio-format"); command.add("mp3");
+
         command.add("-o"); command.add(outputTemplate);
+
         command.add("--embed-thumbnail");
         command.add("--add-metadata");
         command.add("--convert-thumbnails"); command.add("jpg");
 
-        // 🔥 Só adiciona isso se NÃO for playlist
         if (!isPlaylist) {
             command.add("--no-playlist");
         }
 
         command.add(url);
 
-        ProcessBuilder processBuilder = new ProcessBuilder(command);
-
-        processBuilder.inheritIO();
-
-        Process process = processBuilder.start();
-        int exitCode = process.waitFor();
-
-        if (exitCode != 0) {
-            throw new RuntimeException("Erro ao executar download");
-        }
-
-        System.out.println("\n✅ Download concluído!");
+        return command;
     }
 
+    // 🔧 Leitura do output (progresso real)
+    private void readProcessOutput(
+            Process process,
+            java.util.function.Consumer<Double> onProgress,
+            java.util.function.Consumer<String> onLog
+    ) {
+
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream()))) {
+
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+
+                onLog.accept(line);
+
+                extractProgress(line, onProgress);
+            }
+
+        } catch (Exception e) {
+            onLog.accept("Erro ao ler output: " + e.getMessage());
+        }
+    }
+
+    // 🔧 Extrai porcentagem do yt-dlp
+    private void extractProgress(String line, java.util.function.Consumer<Double> onProgress) {
+
+        try {
+            if (line.contains("[download]") && line.contains("%")) {
+
+                int percentIndex = line.indexOf('%');
+
+                String percentStr = line.substring(0, percentIndex);
+
+                percentStr = percentStr.replaceAll("[^0-9.]", "");
+
+                if (!percentStr.isEmpty()) {
+                    double progress = Double.parseDouble(percentStr) / 100.0;
+                    onProgress.accept(progress);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    // 🔧 Detecta playlist
     private boolean isPlaylist(String url) {
         return url.contains("playlist?list=");
     }
-    
-    public void downloadWithPath(String url, String basePath) throws IOException, InterruptedException {
 
-        boolean isPlaylist = isPlaylist(url);
+    // 🔧 Normaliza URL (remove parâmetros extras)
+    private String normalizeUrl(String url) {
 
-        String outputTemplate;
+        if (url.contains("watch?v=")) {
 
-        if (isPlaylist) {
-            outputTemplate = basePath + "\\%(playlist_title)s\\%(title)s.%(ext)s";
-        } else {
-            outputTemplate = basePath + "\\%(title)s.%(ext)s";
+            int index = url.indexOf("&");
+
+            if (index != -1) {
+                return url.substring(0, index);
+            }
         }
 
-        List<String> command = new ArrayList<>();
-
-        command.add("yt-dlp");
-        command.add("-f"); command.add("bestaudio");
-        command.add("-x");
-        command.add("--audio-format"); command.add("mp3");
-        command.add("-o"); command.add(outputTemplate);
-        command.add("--embed-thumbnail");
-        command.add("--add-metadata");
-        command.add("--convert-thumbnails"); command.add("jpg");
-
-        if (!isPlaylist) {
-            command.add("--no-playlist");
-        }
-
-        command.add(url);
-
-        ProcessBuilder pb = new ProcessBuilder(command);
-        pb.inheritIO();
-
-        Process process = pb.start();
-        int exit = process.waitFor();
-
-        if (exit != 0) {
-            throw new RuntimeException("Erro no download");
-        }
+        return url;
     }
-    
 }
