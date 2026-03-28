@@ -1,3 +1,4 @@
 uaitube\service\YoutubeService.class
 uaitube\ui\UaiTubeUI.class
 uaitube\DownloaderApplication.class
+uaitube\runner\ConsoleRunner.class

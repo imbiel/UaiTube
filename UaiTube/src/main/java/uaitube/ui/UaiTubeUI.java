@@ -17,11 +17,13 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 
 import uaitube.service.YoutubeService;
 
-import java.io.File;
+import java.io.*;
+import java.net.URI;
+import java.awt.Desktop;
 
 public class UaiTubeUI extends Application {
 
-    private String downloadPath = System.getProperty("user.home") + "\\Music";
+    private String downloadPath = getWindowsMusicFolder();
 
     @Override
     public void start(Stage stage) {
@@ -39,6 +41,7 @@ public class UaiTubeUI extends Application {
         root.setPadding(new Insets(20));
         root.setStyle("-fx-background-color: #0f0f0f;");
 
+        // 🔴 HEADER
         Label title = new Label("UaiTube");
         title.setStyle("-fx-text-fill: #ff3b3b; -fx-font-size: 24px; -fx-font-weight: bold;");
 
@@ -48,8 +51,12 @@ public class UaiTubeUI extends Application {
         VBox header = new VBox(5, title, desc);
         header.setAlignment(Pos.CENTER);
 
+        Label infoURL = new Label("Cole aqui a URL do YouTube:");
+        infoURL.setStyle("-fx-text-fill: #b3b3b3;");
+
+        // 🔴 INPUT
         TextField urlField = new TextField();
-        urlField.setPromptText("Cole a URL do YouTube...");
+        urlField.setPromptText("Cole a URL aqui");
         urlField.setStyle("-fx-background-color: #1f1f1f; -fx-text-fill: white;");
 
         // 🔴 PASTA
@@ -62,6 +69,8 @@ public class UaiTubeUI extends Application {
 
         chooseFolder.setOnAction(e -> {
             DirectoryChooser chooser = new DirectoryChooser();
+            chooser.setInitialDirectory(new File(downloadPath));
+
             File file = chooser.showDialog(stage);
             if (file != null) {
                 downloadPath = file.getAbsolutePath();
@@ -77,11 +86,23 @@ public class UaiTubeUI extends Application {
         Label info = new Label("Aguardando...");
         info.setStyle("-fx-text-fill: #b3b3b3;");
 
-        // 🔴 NOME ATUAL
+        // 🔴 NOME
         Label musicName = new Label("-");
         musicName.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
 
-        // 🔴 LISTA VISUAL DE DOWNLOADS
+        // 🔴 PROGRESSO
+        ProgressBar progress = new ProgressBar(0);
+        progress.setPrefWidth(400);
+        progress.setStyle("-fx-accent: #ff3b3b;");
+
+        // 🔴 BOTÃO
+        Button downloadBtn = new Button("⬇ Download");
+        styleButton(downloadBtn);
+
+        Label infoLista = new Label("Músicas baixadas:");
+        infoLista.setStyle("-fx-text-fill: #b3b3b3;");
+        
+        // 🔴 LISTA
         ObservableList<String> musicList = FXCollections.observableArrayList();
         ListView<String> listView = new ListView<>(musicList);
         listView.setPrefHeight(150);
@@ -90,19 +111,17 @@ public class UaiTubeUI extends Application {
                 "-fx-text-fill: white;"
         );
 
-        // 🔴 PROGRESSO
-        ProgressBar progress = new ProgressBar(0);
-        progress.setPrefWidth(400);
-        progress.setStyle("-fx-accent: #ff3b3b;");
-
+        Label infoLog = new Label("Informações de Log:");
+        infoLog.setStyle("-fx-text-fill: #b3b3b3;");
+        
         // 🔴 LOG
         TextArea logArea = new TextArea();
         logArea.setEditable(false);
         logArea.setPrefHeight(120);
-        logArea.setStyle("-fx-control-inner-background:#181818; -fx-text-fill:white;");
-
-        Button downloadBtn = new Button("⬇ Download");
-        styleButton(downloadBtn);
+        logArea.setStyle(
+                "-fx-control-inner-background:#181818;" +
+                "-fx-text-fill:white;"
+        );
 
         final String[] lastUrl = {""};
 
@@ -114,24 +133,32 @@ public class UaiTubeUI extends Application {
             musicList.clear();
         });
 
-        // 🔥 BUSCAR NOME AO COLAR URL
+        // 🔥 BUSCA AUTOMÁTICA
         urlField.textProperty().addListener((obs, oldValue, newValue) -> {
 
             if (newValue != null && !newValue.isEmpty() && !newValue.equals(lastUrl[0])) {
 
                 lastUrl[0] = newValue;
-
                 resetUI.run();
 
-                Platform.runLater(() -> info.setText("🔎 Buscando informações..."));
+                info.setText("🔎 Buscando informações...");
 
                 new Thread(() -> {
+
                     String titleMusic = service.getMusicTitle(newValue);
+                    boolean isPlaylist = newValue.contains("playlist");
 
                     Platform.runLater(() -> {
-                        musicName.setText("🎵 " + titleMusic);
+
+                        if (isPlaylist) {
+                            musicName.setText("📂 Playlist: " + titleMusic);
+                        } else {
+                            musicName.setText("🎧 Música: " + titleMusic);
+                        }
+
                         info.setText("Pronto para download");
                     });
+
                 }).start();
             }
         });
@@ -155,31 +182,31 @@ public class UaiTubeUI extends Application {
                             url,
                             downloadPath,
 
-                            // progresso
                             p -> Platform.runLater(() -> progress.setProgress(p)),
 
-                            // log + lista visual
                             line -> Platform.runLater(() -> {
 
                                 logArea.appendText(line + "\n");
 
-                                // 🔥 CAPTURA NOME DA MÚSICA
-                                if (line.contains("[download] Destination:")) {
+                                if (line.startsWith("after_move:")) {
 
-                                    String name = line.replace("[download] Destination:", "").trim();
+                                    String name = line.replace("after_move:", "").trim();
 
-                                    musicList.add("⬇ " + name);
-                                }
-
-                                // 🔥 MARCAR COMO CONCLUÍDO
-                                if (line.contains("100%")) {
-                                    int lastIndex = musicList.size() - 1;
-                                    if (lastIndex >= 0) {
-                                        String current = musicList.get(lastIndex);
-                                        musicList.set(lastIndex, "✔ " + current.substring(2));
+                                    if (name.endsWith(".mp3")) {
+                                        musicList.add("✔ " + name);
                                     }
                                 }
+                                else if (line.contains("Destination:") && line.contains(".mp3")) {
 
+                                    String fullPath = line.substring(line.indexOf("Destination:") + 12).trim();
+                                    String name = new File(fullPath).getName();
+
+                                    musicList.add("✔ " + name);
+                                }
+                                else if (line.toLowerCase().contains("error")) {
+
+                                    musicList.add("❌ Erro no download");
+                                }
                             })
                     );
 
@@ -191,21 +218,78 @@ public class UaiTubeUI extends Application {
             }).start();
         });
 
+        // 🔻 FOOTER (CRÉDITOS)
+        Label footerText = new Label("UaiTube v1.0 • © 2026 • Gabriel Lirio • ");
+        footerText.setStyle("-fx-text-fill: #b3b3b3; -fx-font-size: 11px;");
+
+        Hyperlink githubLink = new Hyperlink("GitHub");
+        githubLink.setStyle(
+                "-fx-text-fill: #ff3b3b;" +
+                "-fx-font-size: 11px;" +
+                "-fx-cursor: hand;"
+        );
+
+        githubLink.setTooltip(new Tooltip("Abrir repositório"));
+
+        githubLink.setOnAction(e -> {
+            try {
+                Desktop.getDesktop().browse(
+                        new URI("https://github.com/imbiel/UaiTube")
+                );
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
+
+        HBox footer = new HBox(5, footerText, githubLink);
+        footer.setAlignment(Pos.CENTER);
+        footer.setPadding(new Insets(10, 0, 0, 0));
+
+        // 🔴 LAYOUT
         root.getChildren().addAll(
                 header,
+                infoURL,
                 urlField,
                 folderBox,
                 info,
                 musicName,
-                listView, // 🔥 NOVA LISTA VISUAL
                 progress,
                 downloadBtn,
-                logArea
+                infoLista,
+                listView,
+                infoLog,
+                logArea,
+                footer
         );
 
-        stage.setScene(new Scene(root, 520, 650));
+        stage.setScene(new Scene(root, 520, 700));
         stage.setTitle("UaiTube");
         stage.show();
+    }
+
+    private String getWindowsMusicFolder() {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                    "powershell",
+                    "-command",
+                    "[environment]::getfolderpath('MyMusic')"
+            );
+
+            Process p = pb.start();
+
+            BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(p.getInputStream())
+            );
+
+            String result = reader.readLine();
+
+            if (result != null && !result.isEmpty()) {
+                return result;
+            }
+
+        } catch (Exception ignored) {}
+
+        return System.getProperty("user.home") + "\\Music";
     }
 
     private void styleButton(Button btn) {
