@@ -1,15 +1,25 @@
 package uaitube.service;
 
-import org.springframework.stereotype.Service;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
+
+import org.springframework.stereotype.Service;
 
 @Service
 public class YoutubeService {
+	
+    // 🔥 USER AGENTS
+	private static final List<String> USER_AGENTS = List.of(
+	        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+	        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15",
+	        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/118 Safari/537.36",
+	        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148",
+	        "Mozilla/5.0 (Android 13; Mobile) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36"
+	);
 
     public void downloadWithProgress(
             String url,
@@ -60,22 +70,49 @@ public class YoutubeService {
         command.add("-f"); command.add("bestaudio");
         command.add("-x");
         command.add("--audio-format"); command.add("mp3");
-
+        
         command.add("-o"); command.add(outputTemplate);
 
         command.add("--embed-thumbnail");
         command.add("--add-metadata");
         command.add("--convert-thumbnails"); command.add("jpg");
+        
+        // 🔥 USER AGENT ROTATIVO
+//        command.add("--user-agent");
+//        command.add(getRandomUserAgent());
 
+        if (isPlaylist) {
+//            command.add("--sleep-interval"); command.add("1");
+//            command.add("--max-sleep-interval"); command.add("5");
+//
+//            command.add("--retries"); command.add("10");
+//            command.add("--fragment-retries"); command.add("10");
+//
+//            command.add("--concurrent-fragments"); command.add("1");
+//            command.add("--limit-rate"); command.add("1M");
+        	
+            command.add("--parse-metadata");
+            command.add("playlist_index:%(track_number)s");
+            
+            command.add("--replace-in-metadata");
+            command.add("playlist_title");
+            command.add("^Album - ");
+            command.add("");
+        }
+        
         if (!isPlaylist) {
             command.add("--no-playlist");
         }
-
+        
         command.add(url);
 
         return command;
     }
 
+    private String getRandomUserAgent() {
+        return USER_AGENTS.get(new Random().nextInt(USER_AGENTS.size()));
+    }
+    
     // 🔧 Leitura do output (progresso real)
     private void readProcessOutput(
             Process process,

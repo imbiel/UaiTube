@@ -45,7 +45,7 @@ public class UaiTubeUI extends Application {
         Label title = new Label("UaiTube");
         title.setStyle("-fx-text-fill: #ff3b3b; -fx-font-size: 24px; -fx-font-weight: bold;");
 
-        Label desc = new Label("Baixe músicas e playlists do YouTube");
+        Label desc = new Label("Baixe Música/Album/playlist do YouTube");
         desc.setStyle("-fx-text-fill: #b3b3b3;");
 
         VBox header = new VBox(5, title, desc);
@@ -105,7 +105,7 @@ public class UaiTubeUI extends Application {
         // 🔴 LISTA
         ObservableList<String> musicList = FXCollections.observableArrayList();
         ListView<String> listView = new ListView<>(musicList);
-        listView.setPrefHeight(150);
+        listView.setPrefHeight(120);
         listView.setStyle(
                 "-fx-control-inner-background: #181818;" +
                 "-fx-text-fill: white;"
@@ -255,7 +255,7 @@ public class UaiTubeUI extends Application {
                 musicName,
                 progress,
                 downloadBtn,
-                infoLista,
+//                infoLista,
                 listView,
                 infoLog,
                 logArea,
