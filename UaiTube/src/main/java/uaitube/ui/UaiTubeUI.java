@@ -1,5 +1,13 @@
 package uaitube.ui;
 
+import java.awt.Desktop;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStreamReader;
+import java.net.URI;
+
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -7,19 +15,24 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
-import javafx.scene.layout.*;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.Hyperlink;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
+import javafx.scene.control.ProgressBar;
+import javafx.scene.control.RadioButton;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
+import javafx.scene.control.ToggleGroup;
+import javafx.scene.image.Image;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
-import javafx.scene.image.Image;
-
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-
 import uaitube.service.YoutubeService;
-
-import java.io.*;
-import java.net.URI;
-import java.awt.Desktop;
+import uaitube.util.DownloadMode;
 
 public class UaiTubeUI extends Application {
 
@@ -89,6 +102,26 @@ public class UaiTubeUI extends Application {
         // 🔴 NOME
         Label musicName = new Label("-");
         musicName.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+
+        // 🔥 NOVO: SELETOR DE MODO (RadioButton)
+        Label modeLabel = new Label("Download:");
+        modeLabel.setStyle("-fx-text-fill: #b3b3b3;");
+
+        ToggleGroup modeGroup = new ToggleGroup();
+
+        RadioButton normalMode = new RadioButton("Normal");
+        RadioButton fastMode = new RadioButton("Rápido");
+
+        normalMode.setToggleGroup(modeGroup);
+        fastMode.setToggleGroup(modeGroup);
+
+        normalMode.setSelected(true); // default
+
+        normalMode.setStyle("-fx-text-fill: white;");
+        fastMode.setStyle("-fx-text-fill: white;");
+
+        HBox modeBox = new HBox(10, modeLabel, normalMode, fastMode);
+        modeBox.setAlignment(Pos.CENTER_LEFT);
 
         // 🔴 PROGRESSO
         ProgressBar progress = new ProgressBar(0);
@@ -173,7 +206,17 @@ public class UaiTubeUI extends Application {
                 return;
             }
 
-            info.setText(url.contains("playlist") ? "📂 Playlist..." : "🎵 Baixando...");
+            DownloadMode mode = fastMode.isSelected()
+                    ? DownloadMode.FAST
+                    : DownloadMode.NORMAL;
+            
+            boolean isFast = fastMode.isSelected();
+
+            info.setText(
+                    url.contains("playlist")
+                            ? (isFast ? "📂 Playlist (Rápido)..." : "📂 Playlist...")
+                            : (isFast ? "🎵 Baixando (Rápido)..." : "🎵 Baixando...")
+            );
 
             new Thread(() -> {
                 try {
@@ -181,9 +224,8 @@ public class UaiTubeUI extends Application {
                     service.downloadWithProgress(
                             url,
                             downloadPath,
-
+                            mode,
                             p -> Platform.runLater(() -> progress.setProgress(p)),
-
                             line -> Platform.runLater(() -> {
 
                                 logArea.appendText(line + "\n");
@@ -218,7 +260,7 @@ public class UaiTubeUI extends Application {
             }).start();
         });
 
-        // 🔻 FOOTER (CRÉDITOS)
+        // 🔻 FOOTER
         Label footerText = new Label("UaiTube v1.0 • © 2026 • Gabriel Lirio • ");
         footerText.setStyle("-fx-text-fill: #b3b3b3; -fx-font-size: 11px;");
 
@@ -228,8 +270,6 @@ public class UaiTubeUI extends Application {
                 "-fx-font-size: 11px;" +
                 "-fx-cursor: hand;"
         );
-
-        githubLink.setTooltip(new Tooltip("Abrir repositório"));
 
         githubLink.setOnAction(e -> {
             try {
@@ -243,7 +283,6 @@ public class UaiTubeUI extends Application {
 
         HBox footer = new HBox(5, footerText, githubLink);
         footer.setAlignment(Pos.CENTER);
-        footer.setPadding(new Insets(10, 0, 0, 0));
 
         // 🔴 LAYOUT
         root.getChildren().addAll(
@@ -254,8 +293,8 @@ public class UaiTubeUI extends Application {
                 info,
                 musicName,
                 progress,
+                modeBox, // 🔥 NOVO AQUI
                 downloadBtn,
-//                infoLista,
                 listView,
                 infoLog,
                 logArea,

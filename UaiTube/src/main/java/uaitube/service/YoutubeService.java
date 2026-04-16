@@ -9,6 +9,8 @@ import java.util.Random;
 
 import org.springframework.stereotype.Service;
 
+import uaitube.util.DownloadMode;
+
 @Service
 public class YoutubeService {
 	
@@ -24,6 +26,7 @@ public class YoutubeService {
     public void downloadWithProgress(
             String url,
             String basePath,
+            DownloadMode mode,
             java.util.function.Consumer<Double> onProgress,
             java.util.function.Consumer<String> onLog
     ) throws IOException {
@@ -35,7 +38,7 @@ public class YoutubeService {
                 ? basePath + "\\%(playlist_title)s\\%(title)s.%(ext)s"
                 : basePath + "\\%(title)s.%(ext)s";
 
-        List<String> command = buildCommand(normalizedUrl, outputTemplate, isPlaylist);
+        List<String> command = buildCommand(normalizedUrl, outputTemplate, isPlaylist, mode);
 
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
@@ -62,7 +65,7 @@ public class YoutubeService {
     }
 
     // 🔧 Monta comando yt-dlp
-    private List<String> buildCommand(String url, String outputTemplate, boolean isPlaylist) {
+    private List<String> buildCommand(String url, String outputTemplate, boolean isPlaylist, DownloadMode mode) {
 
         List<String> command = new ArrayList<>();
 
@@ -78,18 +81,21 @@ public class YoutubeService {
         command.add("--convert-thumbnails"); command.add("jpg");
         
         // 🔥 USER AGENT ROTATIVO
-//        command.add("--user-agent");
-//        command.add(getRandomUserAgent());
+        command.add("--user-agent");
+        command.add(getRandomUserAgent());
 
         if (isPlaylist) {
-//            command.add("--sleep-interval"); command.add("1");
-//            command.add("--max-sleep-interval"); command.add("5");
-//
-//            command.add("--retries"); command.add("10");
-//            command.add("--fragment-retries"); command.add("10");
-//
-//            command.add("--concurrent-fragments"); command.add("1");
-//            command.add("--limit-rate"); command.add("1M");
+        	// 🔥 MODO NORMAL (com proteção)
+            if (mode == DownloadMode.NORMAL) {
+                command.add("--sleep-interval"); command.add("1");
+                command.add("--max-sleep-interval"); command.add("10");
+
+                command.add("--retries"); command.add("10");
+                command.add("--fragment-retries"); command.add("10");
+
+                command.add("--concurrent-fragments"); command.add("1");
+                command.add("--limit-rate"); command.add("1M");
+        	}
         	
             command.add("--parse-metadata");
             command.add("playlist_index:%(track_number)s");
